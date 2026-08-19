@@ -3,38 +3,45 @@ import type {
   GitHubUser,
 } from "../types/github";
 
-const GITHUB_API_URL = "https://api.github.com";
+const GITHUB_API_URL =
+  "https://api.github.com";
 
 const githubFetch = async <T>(
   endpoint: string
 ): Promise<T> => {
+
   const response = await fetch(
     `${GITHUB_API_URL}${endpoint}`,
     {
       headers: {
-        Accept: "application/vnd.github+json",
+        Accept:
+          "application/vnd.github+json",
       },
     }
   );
 
   if (!response.ok) {
+
     if (response.status === 404) {
-      throw new Error("GitHub user not found.");
+      throw new Error(
+        "GitHub user not found."
+      );
     }
 
     if (response.status === 403) {
       throw new Error(
-        "GitHub API rate limit exceeded. Please try again later."
+        "GitHub API rate limit exceeded."
       );
     }
 
     throw new Error(
-      "Something went wrong while fetching GitHub data."
+      "Failed to fetch GitHub data."
     );
   }
 
   return response.json();
 };
+
 
 export const getGitHubUser = (
   username: string
@@ -43,6 +50,7 @@ export const getGitHubUser = (
     `/users/${encodeURIComponent(username)}`
   );
 };
+
 
 export const getGitHubRepositories = (
   username: string

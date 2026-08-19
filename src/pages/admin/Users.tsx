@@ -6,22 +6,19 @@ import {
 
 import {
   AlertCircle,
+  ExternalLink,
+  LoaderCircle,
   Search,
   Star,
   Users as UsersIcon,
-  ExternalLink,
-  LoaderCircle,
 } from "lucide-react";
+
+import { useQuery } from "@tanstack/react-query";
 
 import {
   getGitHubRepositories,
   getGitHubUser,
 } from "../../services/githubApi";
-
-import type {
-  GitHubRepository,
-  GitHubUser,
-} from "../../types/github";
 
 
 type SortOption =
@@ -31,9 +28,9 @@ type SortOption =
 
 const Users = () => {
 
-  // ==============================
-  // Search
-  // ==============================
+  // =====================================
+  // USERNAME SEARCH
+  // =====================================
 
   const [username, setUsername] =
     useState("");
@@ -42,44 +39,34 @@ const Users = () => {
     useState("");
 
 
-  // ==============================
-  // GitHub Data
-  // ==============================
-
-  const [user, setUser] =
-    useState<GitHubUser | null>(null);
-
-  const [repositories, setRepositories] =
-    useState<GitHubRepository[]>([]);
-
-
-  // ==============================
-  // UI State
-  // ==============================
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
+  // =====================================
+  // REPOSITORY FILTER
+  // =====================================
 
   const [repoSearch, setRepoSearch] =
     useState("");
+
+
+  // =====================================
+  // SORT
+  // =====================================
 
   const [sortBy, setSortBy] =
     useState<SortOption>("stars");
 
 
-  // ==============================
-  // Debounce Search
-  // ==============================
+  // =====================================
+  // 500ms DEBOUNCE
+  // =====================================
 
   useEffect(() => {
 
     const timer = setTimeout(() => {
+
       setDebouncedUsername(
         username.trim()
       );
+
     }, 500);
 
 
@@ -90,84 +77,71 @@ const Users = () => {
   }, [username]);
 
 
-  // ==============================
-  // Fetch GitHub Data
-  // ==============================
+  // =====================================
+  // GITHUB USER QUERY
+  // =====================================
 
-  useEffect(() => {
+  const userQuery = useQuery({
+    queryKey: [
+      "github-user",
+      debouncedUsername,
+    ],
 
-    if (!debouncedUsername) {
+    queryFn: () =>
+      getGitHubUser(
+        debouncedUsername
+      ),
 
-      setUser(null);
-      setRepositories([]);
-      setError("");
-
-      return;
-    }
-
-
-    const fetchGitHubData =
-      async () => {
-
-        try {
-
-          setLoading(true);
-          setError("");
-
-          setUser(null);
-          setRepositories([]);
+    enabled:
+      Boolean(debouncedUsername),
+  });
 
 
-          // Fetch user and repositories
-          // at the same time
-          const [
-            userData,
-            repoData,
-          ] = await Promise.all([
-            getGitHubUser(
-              debouncedUsername
-            ),
+  // =====================================
+  // GITHUB REPOSITORIES QUERY
+  // =====================================
 
-            getGitHubRepositories(
-              debouncedUsername
-            ),
-          ]);
+  const repositoriesQuery = useQuery({
+    queryKey: [
+      "github-repositories",
+      debouncedUsername,
+    ],
 
+    queryFn: () =>
+      getGitHubRepositories(
+        debouncedUsername
+      ),
 
-          setUser(userData);
-          setRepositories(repoData);
-
-        } catch (error) {
-
-          if (
-            error instanceof Error
-          ) {
-            setError(error.message);
-          } else {
-            setError(
-              "Unable to fetch GitHub data."
-            );
-          }
-
-          setUser(null);
-          setRepositories([]);
-
-        } finally {
-
-          setLoading(false);
-
-        }
-      };
+    enabled:
+      Boolean(debouncedUsername),
+  });
 
 
-    fetchGitHubData();
+  // =====================================
+  // COMBINED STATES
+  // =====================================
 
-  }, [debouncedUsername]);
+  const loading =
+    userQuery.isPending ||
+    repositoriesQuery.isPending;
 
 
-  // ==============================
-  // Filter + Sort Repositories
-  // ==============================
+  const error =
+    userQuery.error ||
+    repositoriesQuery.error;
+
+
+  const user =
+    userQuery.data;
+
+
+  const repositories =
+    repositoriesQuery.data ?? [];
+
+
+  // =====================================
+  // FILTER + SORT
+  // =====================================
 
   const filteredRepositories =
     useMemo(() => {
@@ -178,7 +152,8 @@ const Users = () => {
             repo.name
               .toLowerCase()
               .includes(
-                repoSearch.toLowerCase()
+                repoSearch
+                  .toLowerCase()
               )
         );
 
@@ -187,15 +162,19 @@ const Users = () => {
         (a, b) => {
 
           if (sortBy === "stars") {
+
             return (
               b.stargazers_count -
               a.stargazers_count
             );
+
           }
+
 
           return a.name.localeCompare(
             b.name
           );
+
         }
       );
 
@@ -227,7 +206,7 @@ const Users = () => {
 
 
       {/* =================================
-          USERNAME SEARCH
+          USER SEARCH
       ================================== */}
 
       <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
@@ -265,7 +244,7 @@ const Users = () => {
 
 
         <p className="mt-2 text-xs text-text-secondary">
-          Search waits 500ms after you stop typing before making the request.
+          Search will start 500ms after you stop typing.
         </p>
 
       </div>
@@ -305,7 +284,7 @@ const Users = () => {
 
           <AlertCircle
             size={20}
-            className="mt-0.5 shrink-0 text-red-500"
+            className="mt-0.5 text-red-500"
           />
 
           <div>
@@ -315,7 +294,9 @@ const Users = () => {
             </h3>
 
             <p className="mt-1 text-sm text-red-600">
-              {error}
+              {error instanceof Error
+                ? error.message
+                : "Something went wrong."}
             </p>
 
           </div>
@@ -335,16 +316,12 @@ const Users = () => {
 
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 
-            {/* Avatar */}
-
             <img
               src={user.avatar_url}
               alt={`${user.login} avatar`}
               className="h-24 w-24 rounded-full border-4 border-green-50 object-cover"
             />
 
-
-            {/* User Info */}
 
             <div className="flex-1">
 
@@ -367,7 +344,6 @@ const Users = () => {
                   <ExternalLink
                     size={14}
                   />
-
                 </a>
 
               </div>
@@ -378,8 +354,6 @@ const Users = () => {
                   "No bio available."}
               </p>
 
-
-              {/* Followers */}
 
               <div className="mt-4 flex flex-wrap gap-5">
 
@@ -432,7 +406,7 @@ const Users = () => {
 
         <section className="rounded-xl border border-border bg-white shadow-sm">
 
-          {/* Repository Header */}
+          {/* Header */}
 
           <div className="flex flex-col gap-4 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
 
@@ -506,7 +480,7 @@ const Users = () => {
           {/* Repository List */}
 
           {filteredRepositories.length ===
-            0 ? (
+          0 ? (
 
             <div className="p-10 text-center">
 
@@ -530,8 +504,6 @@ const Users = () => {
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 
-                      {/* Repo Details */}
-
                       <div className="min-w-0 flex-1">
 
                         <a
@@ -545,18 +517,12 @@ const Users = () => {
 
 
                         <p className="mt-1 max-w-3xl text-sm leading-6 text-text-secondary">
-
                           {repo.description ||
                             "No description available."}
-
                         </p>
 
 
-                        {/* Metadata */}
-
                         <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-text-secondary">
-
-                          {/* Stars */}
 
                           <span className="flex items-center gap-1">
 
@@ -570,14 +536,10 @@ const Users = () => {
                           </span>
 
 
-                          {/* Language */}
-
                           {repo.language && (
 
                             <span className="rounded-full bg-gray-100 px-2.5 py-1">
-
                               {repo.language}
-
                             </span>
 
                           )}
@@ -587,21 +549,17 @@ const Users = () => {
                       </div>
 
 
-                      {/* GitHub Link */}
-
                       <a
                         href={repo.html_url}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium text-gray-700 transition hover:border-primary hover:text-primary"
                       >
-
                         View
 
                         <ExternalLink
                           size={14}
                         />
-
                       </a>
 
                     </div>
